@@ -1,11 +1,11 @@
 import { readFileSync } from "fs";
 import { config } from "../config";
 import { join } from "path";
-import type { FileEvent, Message } from "../interfaces";
+import type { FilePath, Message } from "../interfaces";
 
 let messageCounter = 0;
 
-export function fileChangeEventToMsg({ path }: FileEvent): Message {
+export function fileChangeEventToMsg({ path }: FilePath): Message {
   return {
     jsonrpc: "2.0",
     method: "pushFile",
@@ -18,7 +18,7 @@ export function fileChangeEventToMsg({ path }: FileEvent): Message {
   };
 }
 
-export function fileRemovalEventToMsg({ path }: FileEvent): Message {
+export function fileRemovalEventToMsg({ path }: FilePath): Message {
   return {
     jsonrpc: "2.0",
     method: "deleteFile",

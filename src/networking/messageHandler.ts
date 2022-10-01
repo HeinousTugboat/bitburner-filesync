@@ -1,12 +1,12 @@
 import { messageTracker } from "./messageTracker";
 import { Stats, writeFile } from "fs";
 import { config } from "../config";
-import { EventType } from "../eventTypes";
+import { Event, messageSend } from "../eventTypes";
 import { fileChangeEventToMsg } from "./messageGenerators";
-import type { Signal } from "signal-js";
 import { Message } from "../interfaces";
+import { Subject } from "rxjs";
 
-export function messageHandler(signaller: Signal, msg: Message, paths: Map<string, Stats>) {
+export function messageHandler(messages$: Subject<Event>, msg: Message, paths: Map<string, Stats>) {
   let incoming;
 
   try {
@@ -30,7 +30,7 @@ export function messageHandler(signaller: Signal, msg: Message, paths: Map<strin
 
       paths.forEach((stats, fileName) => {
         if (!stats.isDirectory() && !gameFiles.includes(fileName))
-          signaller.emit(EventType.MessageSend, fileChangeEventToMsg({ path: fileName }));
+          messages$.next(messageSend(fileChangeEventToMsg({ path: fileName })));
       });
     }
   }

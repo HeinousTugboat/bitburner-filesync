@@ -1,9 +1,9 @@
 import CheapWatch from "cheap-watch";
 import { config } from "./config";
-import { EventType } from "./eventTypes";
+import { Event, fileChanged, fileDeleted } from "./eventTypes";
 import { resolve } from "path";
-import type { Signal } from "signal-js";
 import type { File } from "./interfaces";
+import { filter, fromEvent, Subject } from "rxjs";
 
 function fileFilter(file: File) {
   if (config.get("allowedFiletypes").some((extension) => file.path.endsWith(extension))) return true;
@@ -11,7 +11,7 @@ function fileFilter(file: File) {
   return false;
 }
 
-export async function setupWatch(signaller: Signal) {
+export async function setupWatch(messages$: Subject<Event>) {
   const watch = new CheapWatch({
     dir: config.get("scriptsFolder"),
     filter: fileFilter,
@@ -20,12 +20,13 @@ export async function setupWatch(signaller: Signal) {
 
   if (!config.get("quiet")) console.log("Watching folder", resolve(config.get("scriptsFolder")));
 
-  watch.on("+", (fileEvent) => {
-    if (fileEvent.stats.isFile()) signaller.emit(EventType.FileChanged, fileEvent);
-  });
-  watch.on("-", (fileEvent) => {
-    if (fileEvent.stats.isFile()) signaller.emit(EventType.FileDeleted, fileEvent);
-  });
+  fromEvent(watch, "+", (fileEvent: File) => fileEvent)
+    .pipe(filter(({ stats }) => stats.isFile()))
+    .subscribe((fileEvent) => messages$.next(fileChanged(fileEvent)));
+
+  fromEvent(watch, "-", (fileEvent: File) => fileEvent)
+    .pipe(filter(({ stats }) => stats.isFile()))
+    .subscribe((fileEvent) => messages$.next(fileDeleted(fileEvent)));
 
   // Wait 'till filewatcher is ready to go
   await watch.init();

@@ -4,6 +4,6 @@
     "esm": true,
     "experimentalSpecifierResolution": "node"
   },
-  "include": ["src/signals.d.ts", "src/**/*", "npx/**/*"],
+  "include": ["src/**/*", "npx/**/*"],
   "extends": "./tsconfig.base.json"
 }

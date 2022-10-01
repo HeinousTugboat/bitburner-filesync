@@ -1,56 +1,56 @@
 import { setupWatch } from "./fileWatch";
 import { config, loadConfig } from "./config";
 import { setupSocket } from "./networking/webSocket";
-import signal from "signal-js";
 import {
   fileChangeEventToMsg,
   fileRemovalEventToMsg,
   requestFilenames,
   requestDefinitionFile,
 } from "./networking/messageGenerators";
-import { EventType } from "./eventTypes";
+import { Event, messageSend, isMessageReceived, isConnectionMade, isFileChanged, isFileDeleted } from "./eventTypes";
 import { messageHandler } from "./networking/messageHandler";
-import { FileEvent, Message } from "./interfaces";
+import { filter, Subject } from "rxjs";
 
 export async function start() {
+  const messages$ = new Subject<Event>();
   loadConfig();
-  const watch = await setupWatch(signal);
-  const socket = setupSocket(signal);
+  const watch = await setupWatch(messages$);
+  const socket = setupSocket(messages$);
 
   // Add a handler for received messages.
-  signal.on(EventType.MessageReceived, (msg: Message) => messageHandler(signal, msg, watch.paths));
+  messages$.pipe(filter(isMessageReceived)).subscribe(({ msg }) => messageHandler(messages$, msg, watch.paths));
 
   // Add a handler for when a connection to a game is made.
-  signal.on(EventType.ConnectionMade, () => {
+  messages$.pipe(filter(isConnectionMade)).subscribe(() => {
     console.log("Connection made!");
 
     if (config.get("definitionFile").update) {
-      signal.emit(EventType.MessageSend, requestDefinitionFile());
+      messages$.next(messageSend(requestDefinitionFile()));
     }
 
     if (config.get("pushAllOnConnection")) {
       const extensions = config.get("allowedFiletypes");
       for (const path of watch.paths.keys()) {
         if (extensions.some((extension) => path.endsWith(extension)))
-          signal.emit(EventType.MessageSend, fileChangeEventToMsg({ path }));
+          messages$.next(messageSend(fileChangeEventToMsg({ path })));
       }
     } else {
       // Upload missing files to the game.
-      signal.emit(EventType.MessageSend, requestFilenames());
+      messages$.next(messageSend(requestFilenames()));
     }
   });
 
   // Add a handler for changed files.
-  signal.on(EventType.FileChanged, (fileEvent: FileEvent) => {
+  messages$.pipe(filter(isFileChanged)).subscribe(({ fileEvent }) => {
     if (!config.get("quiet")) console.log(fileEvent.path + " changed");
-    signal.emit(EventType.MessageSend, fileChangeEventToMsg(fileEvent));
+    messages$.next(messageSend(fileChangeEventToMsg(fileEvent)));
   });
 
   // Add a handler for removed files, if allowed.
   if (config.get("allowDeletingFiles"))
-    signal.on(EventType.FileDeleted, (fileEvent: FileEvent) =>
-      signal.emit(EventType.MessageSend, fileRemovalEventToMsg(fileEvent)),
-    );
+    messages$.pipe(filter(isFileDeleted)).subscribe(({ fileEvent }) => {
+      messages$.next(messageSend(fileRemovalEventToMsg(fileEvent)));
+    });
 
   console.log(`Server is ready, running on ${config.get("port")}!`);
 

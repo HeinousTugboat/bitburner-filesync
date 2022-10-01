@@ -1,29 +1,25 @@
-import type { Signal } from "signal-js";
+import { filter, fromEvent, Subject } from "rxjs";
 import { WebSocketServer } from "ws";
 import { config } from "../config";
-import { EventType } from "../eventTypes";
+import { Event, connection, isMessageSend, isMessage, isWebSocket, messageReceived } from "../eventTypes";
 import { Message } from "../interfaces";
 import { requestDefinitionFile } from "./messageGenerators";
 import { messageTracker } from "./messageTracker";
 
-export function setupSocket(signaller: Signal) {
+function sendMessage(ws: WebSocket, msg: Message) {
+  messageTracker.push(msg);
+  ws.send(JSON.stringify(msg));
+}
+
+export function setupSocket(messages$: Subject<Event>) {
   const wss = new WebSocketServer({ port: config.get("port") });
 
-  wss.on("connection", function connection(ws) {
-    function sendMessage(msg: Message) {
-      messageTracker.push(msg);
-      ws.send(JSON.stringify(msg));
-    }
+  const connection$ = fromEvent(wss, "connection", isWebSocket).subscribe((ws: WebSocket) => {
+    messages$.pipe(filter(isMessageSend)).subscribe((event) => sendMessage(ws, event.msg));
 
-    ws.on("message", (msg) => {
-      signaller.emit(EventType.MessageReceived, msg);
-    });
+    messages$.next(connection());
 
-    signaller.on(EventType.MessageSend, (msg: Message) => {
-      sendMessage(msg);
-    });
-
-    signaller.trigger(EventType.ConnectionMade);
+    const message$ = fromEvent(ws, "message", isMessage).subscribe((msg) => messages$.next(messageReceived(msg)));
   });
 
   return wss;

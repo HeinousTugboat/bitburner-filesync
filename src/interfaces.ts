@@ -7,10 +7,10 @@ export interface Message {
   params?: object;
 }
 
-export interface FileEvent {
+export interface FilePath {
   path: string;
 }
 
-export interface File extends FileEvent {
+export interface File extends FilePath {
   stats: Stats;
 }
